@@ -9,7 +9,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, Client, override_settings
 from django.urls import reverse
 
-from posts.models import Post, Group
+from posts.models import Post, Group, Follow
 
 User = get_user_model()
 
@@ -27,7 +27,8 @@ class ViewsTests(TestCase):
     4. Комментировать посты может только авторизованный пользователь;
     После успешной отправки комментарий появляется на странице поста.
     5. Проверка кэша главной страницы.
-    6. Тестирование паджинатора.
+    6. Проверка подписок.
+    7. Тестирование паджинатора.
     """
 
     def setUp(self):
@@ -36,10 +37,20 @@ class ViewsTests(TestCase):
         # Создаем неавторизованного пользователя.
         self.guest_user = Client()
 
-        # Создаем авторизованного пользователя.
-        self.user = User.objects.create_user(username='test_user')
-        self.authorized_user = Client()
-        self.authorized_user.force_login(self.user)
+        # Создаем первого авторизованного пользователя.
+        self.user1 = User.objects.create_user(username='test_user')
+        self.authorized_user1 = Client()
+        self.authorized_user1.force_login(self.user1)
+
+        # Создаем второго авторизованного пользователя.
+        self.user2 = User.objects.create_user(username='test_user2')
+        self.authorized_user2 = Client()
+        self.authorized_user2.force_login(self.user2)
+
+        # Создаем третьего авторизованного пользователя.
+        self.user3 = User.objects.create_user(username='test_user3')
+        self.authorized_user3 = Client()
+        self.authorized_user3.force_login(self.user3)
 
         # Создаем группу.
         self.group1 = Group.objects.create(
@@ -67,7 +78,7 @@ class ViewsTests(TestCase):
             content_type='image/gif'
         )
         # Отправляем пост "через форму".
-        self.authorized_user.post(
+        self.authorized_user1.post(
             reverse('posts:post_create'),
             data={
                 'text': 'Тестовый текст',
@@ -80,14 +91,14 @@ class ViewsTests(TestCase):
         # Временный пост для проверки кэша главной страницы.
         Post.objects.create(
             text='31fgr2g21rgf43fvb',
-            author=self.user,
+            author=self.user1,
             group=self.group1,
         )
 
         # Данные для комментариев.
         self.data = {'text': 'test_comment1526'}
         # Отправка комментария от авторизованного пользователя.
-        self.authorized_user.post(
+        self.authorized_user1.post(
             reverse('posts:add_comment', kwargs={'post_id': self.post1.id}),
             self.data)
         # Присваиваем созданный комментарий переменной.
@@ -112,7 +123,7 @@ class ViewsTests(TestCase):
                     kwargs={'slug': self.group1.slug}
                     ): 'posts/group_list.html',
             reverse('posts:profile',
-                    kwargs={'username': self.user.username}
+                    kwargs={'username': self.user1.username}
                     ): 'posts/profile.html',
             reverse('posts:post_detail',
                     kwargs={'post_id': self.post1.id}
@@ -127,7 +138,7 @@ class ViewsTests(TestCase):
         for reverse_name, template in templates_page_names.items():
             with self.subTest(reverse_name=reverse_name, template=template):
                 cache.clear()
-                response = self.authorized_user.get(reverse_name)
+                response = self.authorized_user1.get(reverse_name)
                 self.assertTemplateUsed(response, template)
 
         """
@@ -135,14 +146,14 @@ class ViewsTests(TestCase):
         """
 
     def test_post_context_in_index_group_profile_post_detail(self):
-        """Context содержит тестовый пост"""
+        """2.1 Context содержит тестовый пост"""
         # Собираем в словарь пары "response(name)":имя_объекта_context
         reverse_name = {
             reverse('posts:index'): 'page_obj',
             reverse('posts:group_list',
                     kwargs={'slug': self.group1.slug}): 'page_obj',
             reverse('posts:profile',
-                    kwargs={'username': self.user.username}): 'page_obj',
+                    kwargs={'username': self.user1.username}): 'page_obj',
             reverse('posts:post_detail',
                     kwargs={'post_id': self.post1.id}): 'post',
         }
@@ -162,6 +173,7 @@ class ViewsTests(TestCase):
 
     def test_post_create_and_edit_page_show_correct_context(self):
         """
+        2.2
         Проверяем формы создаваемые view-функциями
         post_create и post_create_edit.
         """
@@ -177,7 +189,7 @@ class ViewsTests(TestCase):
         }
         for url in urls:
             with self.subTest(url=url):
-                response = self.authorized_user.get(url)
+                response = self.authorized_user1.get(url)
                 # Проверяем, что типы полей формы в словаре context
                 # соответствуют ожиданиям
                 for field_name, expected_field_type in form_fields.items():
@@ -196,14 +208,14 @@ class ViewsTests(TestCase):
 
     def test_post_exist_on_index(self):
         """Созданный пост появляется на главной странице сайта."""
-        response = self.authorized_user.get(reverse('posts:index'))
+        response = self.authorized_user1.get(reverse('posts:index'))
         self.assertContains(response, self.post1, status_code=200)
 
     def test_post_exist_on_author_page(self):
         """Созданный пост появляется на странице автора поста."""
-        response = self.authorized_user.get(reverse(
+        response = self.authorized_user1.get(reverse(
             'posts:profile',
-            kwargs={'username': self.user.username}))
+            kwargs={'username': self.user1.username}))
         self.assertContains(response, self.post1, status_code=200)
 
     def test_post_not_going_to_wrong_group(self):
@@ -222,13 +234,8 @@ class ViewsTests(TestCase):
                     ))
         self.assertContains(response, self.post1, status_code=200)
 
-    '''
-    4.1  Комментировать посты может только авторизованный пользователь.
-    4.2  После успешной отправки комментарий появляется на странице поста.
-    '''
-
     def test_comments_allowed_to_auth_user_only(self):
-        """Комментировать может только авторизованный."""
+        """4.1 Комментировать может только авторизованный."""
         self.comment_data = {'text': 'test_comment345436'}
         # отправка комментария от неавторизованного пользователя
         self.guest_user.post(
@@ -246,7 +253,9 @@ class ViewsTests(TestCase):
         )
 
     def test_comment_post_and_check(self):
-        """После успешной отправки комментарий появляется на странице поста."""
+        """
+        4.2 После успешной отправки комментарий появляется на странице поста.
+        """
         # Комментарий для post1 отправлен в setUp().
         # Проверка появления комментария на странице поста.
         response = self.guest_user.get(
@@ -259,24 +268,90 @@ class ViewsTests(TestCase):
         """
         5. Проверка кэша главной страницы.
         """
-        # Проверяем временный пост(из фикстур) появился на главной странице.
-        response = self.authorized_user.get(reverse('posts:index'))
+        # Проверяем наличие временного поста(из фикстур) на главной странице.
+        response = self.authorized_user1.get(reverse('posts:index'))
         self.assertContains(response, '31fgr2g21rgf43fvb', status_code=200)
         # Удаляем пост.
         Post.objects.filter(text='31fgr2g21rgf43fvb').delete()
         # Проверяем что он остался в кэше главной страницы.
-        response2 = self.authorized_user.get(reverse('posts:index'))
+        response2 = self.authorized_user1.get(reverse('posts:index'))
         self.assertContains(response2, '31fgr2g21rgf43fvb', status_code=200)
-        # чистим кэш
+        # Чистим кэш.
         cache.clear()
         # Проверяем что пост пропал с главной страницы.
-        response3 = self.authorized_user.get(reverse('posts:index'))
+        response3 = self.authorized_user1.get(reverse('posts:index'))
         self.assertNotContains(response3, '31fgr2g21rgf43fvb', status_code=200)
+
+    def test_user_can_subscribe_and_unsubscribe(self):
+        """6.1 Пользователь может подписываться и отписываться."""
+        # Подписываемся.
+        response = self.authorized_user1.get(
+            reverse(
+                'posts:profile_follow',
+                args=[self.user2.username]
+            ))
+        # Проверка редиректа.
+        self.assertEqual(response.status_code, 302)
+        # Выбираем запись подписки в БД.
+        follow = Follow.objects.filter(
+            user=self.user1,
+            author=self.user2
+        )
+        # Проверяем, что подписка создана.
+        self.assertTrue(follow.exists())
+
+        # Отписываемся.
+        response = self.authorized_user1.get(
+            reverse(
+                'posts:profile_unfollow',
+                args=[self.user2.username]
+            ))
+        # Проверка редиректа.
+        self.assertEqual(response.status_code, 302)
+        # Ищем запись подписки в БД.
+        follow = Follow.objects.filter(
+            user=self.user1,
+            author=self.user2
+        )
+        # Проверяем, что подписка удалена.
+        self.assertFalse(follow.exists())
+
+    def test_feeds(self):
+        """
+        6.2 Пост появляется в ленте подписчиков.
+        """
+        # В фикстурах создан пост от user1;
+        # user2 подписывается на user1.
+        self.authorized_user2.get(
+            reverse(
+                'posts:profile_follow',
+                args=[self.user1.username]
+            ))
+        # Проверяем, что пост есть в ленте user2.
+        response = self.authorized_user2.get(reverse('posts:follow_index'))
+        self.assertEqual(
+            response.context['page_obj'][self.post1.id], self.post1
+        )
+        # Проверяем, что пост отсутствует в ленте не подписанного user3.
+        response = self.authorized_user3.get(reverse('posts:follow_index'))
+        self.assertNotIn(self.post1, response.context['page_obj'])
+
+    def test_user_cant_subscribe_to_self(self):
+        """6.3 Пользователь не может подписываться на себя."""
+        # Попытка подписаться на себя.
+        self.authorized_user1.get(
+            reverse(
+                'posts:profile_follow',
+                args=[self.user1.username]
+            ))
+        # Проверяем, что пост отсутствует в ленте.
+        response = self.authorized_user1.get(reverse('posts:follow_index'))
+        self.assertNotIn(self.post1, response.context['page_obj'])
 
 
 class PaginatorViewsTest(TestCase):
     """
-    6. Проверка паджинатора,
+    7. Проверка паджинатора,
     на страницах должно быть до 10 постов.
     """
 

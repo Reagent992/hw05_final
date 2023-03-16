@@ -26,6 +26,7 @@ def index(request):
     context = {
         'title': 'Последние обновления на сайте',
         'page_obj': page_obj,
+        'index': True,
     }
     return render(request, template, context)
 
@@ -176,6 +177,7 @@ def follow_index(request):
     context = {
         'title': 'Персональная лента',
         'page_obj': page_obj,
+        'follow': True
     }
     return render(request, 'posts/follow.html', context)
 
@@ -184,7 +186,10 @@ def follow_index(request):
 def profile_follow(request, username):
     """Кнопка Подписаться"""
     author = get_object_or_404(User, username=username)
-    if request.user != author:
+    # Подписаться на пользователя можно только один раз.
+    # Подписаться на себя нельзя.
+    check = Follow.objects.filter(user=request.user, author=author).exists()
+    if request.user != author and check is False:
         Follow.objects.create(user=request.user, author=author)
     return redirect('posts:profile', username=author.username)
 
