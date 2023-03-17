@@ -54,7 +54,6 @@
               {% csrf_token %}
               <div class="form-group mb-2">
 
-                {#              {{ form.text|addclass:'form-control' }}#}
                 {% for field in form %}
                   <div class="form-group row my-3"
                           {% if field.field.required %}

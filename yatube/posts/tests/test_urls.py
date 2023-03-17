@@ -63,6 +63,7 @@ class PostURLTests(TestCase):
         url_status_dict = {
             f'/posts/{self.post.id}/edit/': HTTPStatus.OK,
             '/create/': HTTPStatus.OK,
+            '/follow/': HTTPStatus.OK,
         }
         for url, status in url_status_dict.items():
             with self.subTest(url=url, status=status):

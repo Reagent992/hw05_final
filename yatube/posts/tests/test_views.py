@@ -19,16 +19,13 @@ TEMP_MEDIA_ROOT = tempfile.mkdtemp(dir=settings.BASE_DIR)
 @override_settings(MEDIA_ROOT=TEMP_MEDIA_ROOT)
 class ViewsTests(TestCase):
     """
-    Тесты для views.py приложения posts.
-    1. view-классы используют ожидаемые HTML-шаблоны.
-    2. В шаблон передан правильный контекст.
-    3. Если при создании поста указать группу, то этот пост появляется
-    (для index, group, profile).
-    4. Комментировать посты может только авторизованный пользователь;
-    После успешной отправки комментарий появляется на странице поста.
-    5. Проверка кэша главной страницы.
-    6. Проверка подписок.
-    7. Тестирование паджинатора.
+    1. Шаблоны.
+    2. Контекст.
+    3. Работа групп.
+    4. Комментарии
+    5. Кэш
+    6. Подписки
+    7. Паджинатор.
     """
 
     def setUp(self):
@@ -116,6 +113,7 @@ class ViewsTests(TestCase):
         # Собираем в словарь пары "reverse(name)":имя_html_шаблона
         templates_page_names = {
             reverse('posts:index'): 'posts/index.html',
+            reverse('posts:follow_index'): 'posts/follow.html',
             reverse('posts:group_list',
                     kwargs={'slug': self.group1.slug}
                     ): 'posts/group_list.html',
@@ -173,8 +171,7 @@ class ViewsTests(TestCase):
 
     def test_post_create_and_edit_page_show_correct_context(self):
         """
-        2.2
-        Проверяем формы создаваемые view-функциями
+        2.2 Проверяем формы создаваемые view-функциями
         post_create и post_create_edit.
         """
         # Адреса проверяемых страниц
@@ -199,11 +196,7 @@ class ViewsTests(TestCase):
                         self.assertIsInstance(form_field, expected_field_type)
 
     '''
-    3.1 Если при создании поста указать группу,
-        то этот пост появляется на главной странице сайта,
-        на странице выбранной группы, в профайле пользователя.
-    3.2 Проверка, что пост не попал в группу, для которой не
-        был предназначен.
+    3. Работа групп.
     '''
 
     def test_post_exist_on_index(self):
@@ -218,6 +211,13 @@ class ViewsTests(TestCase):
             kwargs={'username': self.user1.username}))
         self.assertContains(response, self.post1, status_code=200)
 
+    def test_post_going_to_right_group(self):
+        """post1 из группы group1 появился в group1."""
+        response = self.guest_user.get(
+            reverse('posts:group_list', kwargs={'slug': self.group1.slug}
+                    ))
+        self.assertContains(response, self.post1, status_code=200)
+
     def test_post_not_going_to_wrong_group(self):
         """post1 из группы group1 не должен попасть в group2."""
         # Открываем вторую группу.
@@ -227,12 +227,9 @@ class ViewsTests(TestCase):
         # Проверяем отсутствие поста.
         self.assertNotContains(response, self.post1, status_code=200)
 
-    def test_post_going_to_right_group(self):
-        """post1 из группы group1 появился в group1."""
-        response = self.guest_user.get(
-            reverse('posts:group_list', kwargs={'slug': self.group1.slug}
-                    ))
-        self.assertContains(response, self.post1, status_code=200)
+    """
+    4. Проверка Комментариев.
+    """
 
     def test_comments_allowed_to_auth_user_only(self):
         """4.1 Комментировать может только авторизованный."""
@@ -282,6 +279,10 @@ class ViewsTests(TestCase):
         response3 = self.authorized_user1.get(reverse('posts:index'))
         self.assertNotContains(response3, '31fgr2g21rgf43fvb', status_code=200)
 
+    """
+    6. Проверка подписок.
+    """
+
     def test_user_can_subscribe_and_unsubscribe(self):
         """6.1 Пользователь может подписываться и отписываться."""
         # Подписываемся.
@@ -317,9 +318,7 @@ class ViewsTests(TestCase):
         self.assertFalse(follow.exists())
 
     def test_feeds(self):
-        """
-        6.2 Пост появляется в ленте подписчиков.
-        """
+        """6.2 Пост появляется в ленте подписчиков."""
         # В фикстурах создан пост от user1;
         # user2 подписывается на user1.
         self.authorized_user2.get(

@@ -3,14 +3,14 @@ from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.cache import cache_page
 
-from yatube.settings import POSTS_PER_PAGE
+from django.conf import settings
 from .forms import PostForm, CommentForm
 from .models import Group, Post, User, Follow
 
 
 def get_paginated_page(request, queryset):
     """Пагинатор, выводит по 10 постов на странице."""
-    paginator = Paginator(queryset, POSTS_PER_PAGE)
+    paginator = Paginator(queryset, settings.POSTS_PER_PAGE)
     page_number = request.GET.get('page')
     return paginator.get_page(page_number)
 
@@ -79,7 +79,7 @@ def post_detail(request, post_id):
     post = get_object_or_404(
         Post.objects.select_related('author', 'group'), id=post_id
     )
-    form = CommentForm(request.POST or None)
+    form = CommentForm()
     comments = post.comments.all()
 
     template = 'posts/post_detail.html'
@@ -163,14 +163,15 @@ def follow_index(request):
     """Персональная лента."""
 
     # Получаем id авторов, на которых подписан пользователь.
-    followed_authors = Follow.objects \
-        .filter(user_id=request.user.id) \
-        .values_list('author_id')
+    followed_authors = Follow.objects.filter(
+        user_id=request.user.id
+    ).values_list('author_id')
 
     # Получаем посты этих авторов,
     # author, и group нужны в карточке поста.
-    post_list = Post.objects.filter(author__in=followed_authors) \
-        .select_related('author', 'group')
+    post_list = Post.objects.filter(
+        author__in=followed_authors
+    ).select_related('author', 'group')
 
     page_obj = get_paginated_page(request, post_list)
 
