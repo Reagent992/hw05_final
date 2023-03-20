@@ -19,12 +19,13 @@ TEMP_MEDIA_ROOT = tempfile.mkdtemp(dir=settings.BASE_DIR)
 @override_settings(MEDIA_ROOT=TEMP_MEDIA_ROOT)
 class ViewsTests(TestCase):
     """
+    Оглавление:
     1. Шаблоны.
     2. Контекст.
     3. Работа групп.
-    4. Комментарии
-    5. Кэш
-    6. Подписки
+    4. Комментарии.
+    5. Кэш.
+    6. Подписки.
     7. Паджинатор.
     """
 
@@ -74,22 +75,13 @@ class ViewsTests(TestCase):
             content=self.small_gif,
             content_type='image/gif'
         )
-        # Отправляем пост "через форму".
-        self.authorized_user1.post(
-            reverse('posts:post_create'),
-            data={
-                'text': 'Тестовый текст',
-                'group': self.group1.id,
-                'image': self.uploaded,
-            }
-        )
-        # Присваиваем его переменной.
-        self.post1 = Post.objects.get(text='Тестовый текст')
-        # Временный пост для проверки кэша главной страницы.
-        Post.objects.create(
-            text='31fgr2g21rgf43fvb',
+
+        # Создаем пост.
+        self.post1 = Post.objects.create(
+            text='Тестовый текст',
             author=self.user1,
             group=self.group1,
+            image=self.uploaded,
         )
 
         # Данные для комментариев.
@@ -102,13 +94,13 @@ class ViewsTests(TestCase):
         self.comment = self.post1.comments.get(text=self.data['text'])
 
     def tearDown(self) -> None:
-        """Удаляем временную папку для медиа-файлов"""
+        """Удаляем временную папку для медиа-файлов."""
         super().tearDown()
         shutil.rmtree(TEMP_MEDIA_ROOT, ignore_errors=True)
 
     def test_pages_uses_correct_template(self):
         """
-        1. view-классы используют ожидаемые HTML-шаблоны.
+        1. View-классы используют ожидаемые HTML-шаблоны.
         """
         # Собираем в словарь пары "reverse(name)":имя_html_шаблона
         templates_page_names = {
@@ -163,7 +155,7 @@ class ViewsTests(TestCase):
                 if obj_name == 'post':
                     post_test = response.context[obj_name]
                 else:
-                    post_test = response.context[obj_name][self.post1.id]
+                    post_test = response.context[obj_name][0]
                 self.assertEqual(post_test.text, self.post1.text)
                 self.assertEqual(post_test.author, self.post1.author)
                 self.assertEqual(post_test.group, self.post1.group)
@@ -257,7 +249,6 @@ class ViewsTests(TestCase):
         # Проверка появления комментария на странице поста.
         response = self.guest_user.get(
             reverse('posts:post_detail', args=[self.post1.id]))
-        print(response.request)
 
         self.assertContains(response, self.comment, status_code=200)
 
@@ -267,17 +258,17 @@ class ViewsTests(TestCase):
         """
         # Проверяем наличие временного поста(из фикстур) на главной странице.
         response = self.authorized_user1.get(reverse('posts:index'))
-        self.assertContains(response, '31fgr2g21rgf43fvb', status_code=200)
+        self.assertContains(response, self.post1, status_code=200)
         # Удаляем пост.
-        Post.objects.filter(text='31fgr2g21rgf43fvb').delete()
+        self.post1.delete()
         # Проверяем что он остался в кэше главной страницы.
         response2 = self.authorized_user1.get(reverse('posts:index'))
-        self.assertContains(response2, '31fgr2g21rgf43fvb', status_code=200)
+        self.assertContains(response2, self.post1, status_code=200)
         # Чистим кэш.
         cache.clear()
         # Проверяем что пост пропал с главной страницы.
         response3 = self.authorized_user1.get(reverse('posts:index'))
-        self.assertNotContains(response3, '31fgr2g21rgf43fvb', status_code=200)
+        self.assertNotContains(response3, self.post1, status_code=200)
 
     """
     6. Проверка подписок.
@@ -328,14 +319,12 @@ class ViewsTests(TestCase):
             ))
         # Проверяем, что пост есть в ленте user2.
         response = self.authorized_user2.get(reverse('posts:follow_index'))
-        self.assertEqual(
-            response.context['page_obj'][self.post1.id], self.post1
-        )
+        self.assertContains(response, self.post1)
         # Проверяем, что пост отсутствует в ленте не подписанного user3.
-        response = self.authorized_user3.get(reverse('posts:follow_index'))
-        self.assertNotIn(self.post1, response.context['page_obj'])
+        response2 = self.authorized_user3.get(reverse('posts:follow_index'))
+        self.assertNotContains(response2, self.post1)
 
-    def test_user_cant_subscribe_to_self(self):
+    def test_user_cant_subscribe_to_himself(self):
         """6.3 Пользователь не может подписываться на себя."""
         # Попытка подписаться на себя.
         self.authorized_user1.get(
