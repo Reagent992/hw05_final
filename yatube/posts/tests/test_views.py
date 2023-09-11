@@ -129,7 +129,8 @@ class ViewsTests(TestCase):
             with self.subTest(reverse_name=reverse_name, template=template):
                 cache.clear()
                 response = self.authorized_user1.get(reverse_name)
-                self.assertTemplateUsed(response, template)
+                self.assertTemplateUsed(
+                    response, template, 'Не совпадают использование шаблоны')
 
         """
         2. В шаблон передан правильный контекст
@@ -156,10 +157,29 @@ class ViewsTests(TestCase):
                     post_test = response.context[obj_name]
                 else:
                     post_test = response.context[obj_name][0]
-                self.assertEqual(post_test.text, self.post1.text)
-                self.assertEqual(post_test.author, self.post1.author)
-                self.assertEqual(post_test.group, self.post1.group)
-                self.assertEqual(post_test.image, self.post1.image)
+                self.assertEqual(
+                    post_test.text,
+                    self.post1.text,
+                    f'Текст поста на странице {reverse_name}'
+                    f' не совпадает с тестовым постом.')
+                self.assertEqual(
+                    post_test.author,
+                    self.post1.author,
+                    f'Автор поста на странице {reverse_name} не совпадает '
+                    f'с автором тестового поста.'
+                )
+                self.assertEqual(
+                    post_test.group,
+                    self.post1.group,
+                    f'Группа поста на странице {reverse_name} не совпадает '
+                    f'с группой тестового поста.'
+                )
+                self.assertEqual(
+                    post_test.image,
+                    self.post1.image,
+                    f'Картинка поста на странице {reverse_name} не совпадает '
+                    f'с картинкой тестового поста.'
+                )
 
     def test_post_create_and_edit_page_show_correct_context(self):
         """
@@ -185,7 +205,13 @@ class ViewsTests(TestCase):
                     with self.subTest(field_name=field_name):
                         form_field = response.context.get('form').fields.get(
                             field_name)
-                        self.assertIsInstance(form_field, expected_field_type)
+                        self.assertIsInstance(
+                            form_field,
+                            expected_field_type,
+                            f'Тип поля формы {field_name} '
+                            f'не совпадает с ожидаемым {expected_field_type}. '
+                            f'На странице {url} '
+                        )
 
     '''
     3. Работа групп.
@@ -194,14 +220,17 @@ class ViewsTests(TestCase):
     def test_post_exist_on_index(self):
         """Созданный пост появляется на главной странице сайта."""
         response = self.authorized_user1.get(reverse('posts:index'))
-        self.assertContains(response, self.post1, status_code=200)
+        self.assertContains(response, self.post1, status_code=200,
+                            msg_prefix='Тестовый пост не появился на главной')
 
     def test_post_exist_on_author_page(self):
         """Созданный пост появляется на странице автора поста."""
         response = self.authorized_user1.get(reverse(
             'posts:profile',
             kwargs={'username': self.user1.username}))
-        self.assertContains(response, self.post1, status_code=200)
+        self.assertContains(response, self.post1, status_code=200,
+                            msg_prefix='Тестовый пост не появился '
+                                       'на странице автора поста')
 
     def test_post_going_to_right_group(self):
         """post1 из группы group1 появился в group1."""
